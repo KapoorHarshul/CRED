@@ -70,7 +70,7 @@ const forgotPassword = async (req, res) => {
     user.resetTokenExpiry = Date.now() + 15 * 60 * 1000; // 15 mins
     await user.save();
 
-    console.log(`Reset link: http://localhost:4000/reset-password/${token}`);
+    console.log(`Reset link: http://localhost:3000/reset-password/${token}`);
     res.json({ message: "Password reset link sent (check console)" });
   } catch (error) {
     console.error("Forgot password error:", error);
@@ -84,13 +84,19 @@ const resetPassword = async (req, res) => {
   const { password } = req.body;
 
   try {
+    console.log("🔑 Reset token received:", token);
+
     const user = await User.findOne({
       resetToken: token,
       resetTokenExpiry: { $gt: Date.now() },
     });
 
-    if (!user)
+    if (!user) {
+      console.warn("❌ No matching user for token or token expired");
       return res.status(400).json({ message: "Invalid or expired token" });
+    }
+
+    console.log("✅ Token matched, resetting password for:", user.email);
 
     const hashedPassword = await bcrypt.hash(password, 10);
     user.password = hashedPassword;

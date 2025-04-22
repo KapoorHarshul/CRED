@@ -4,7 +4,9 @@ const UserSchema = new mongoose.Schema({
   name: String,
   email: { type: String, unique: true },
   password: String,
-  token: String, // ✅ Add token field
+  token: String,
+  resetToken: String,
+  resetTokenExpiry: Date,
 });
 
 const User = mongoose.model("User", UserSchema);
