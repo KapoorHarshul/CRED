@@ -1,7 +1,6 @@
 const express = require("express");
-const User = require("../models/UserModel1"); // Ensure correct import
+const { User } = require("../models/UserModel1"); // Sequelize model
 const authMiddleware = require("../middleware/authMiddleware");
-const mongoose = require("mongoose");
 const router = express.Router();
 
 // ✅ Debug Log
@@ -12,7 +11,9 @@ router.get("/profile", authMiddleware, async (req, res) => {
   console.log(`🛠️ Fetching user profile for: ${req.user.id}`);
 
   try {
-    const user = await User.findById(req.user.id).select("-password");
+    const user = await User.findByPk(req.user.id, {
+      attributes: { exclude: ['password'] }
+    });
 
     if (!user) {
       console.log("❌ User not found");
@@ -32,7 +33,9 @@ router.get("/users", authMiddleware, async (req, res) => {
   console.log("📥 Incoming request to /api/users");
 
   try {
-    const users = await User.find().select("-password");
+    const users = await User.findAll({
+      attributes: { exclude: ['password'] }
+    });
 
     console.log(`✅ Users fetched: ${users.length}`);
     res.json(users);
@@ -52,15 +55,14 @@ router.post("/register", async (req, res) => {
   }
 
   try {
-    let user = await User.findOne({ email });
+    let user = await User.findOne({ where: { email } });
 
     if (user) {
       console.log("❌ Email already exists");
       return res.status(400).json({ message: "Email already in use" });
     }
 
-    user = new User({ name, email, password });
-    await user.save();
+    user = await User.create({ name, email, password });
 
     console.log("✅ User registered:", user);
     res.status(201).json({ message: "User registered successfully" });
@@ -76,7 +78,7 @@ router.put("/update/:id", authMiddleware, async (req, res) => {
 
   try {
     const { name, email, password } = req.body;
-    const user = await User.findById(req.params.id);
+    const user = await User.findByPk(req.params.id);
 
     if (!user) {
       console.log("❌ User not found");
@@ -86,7 +88,7 @@ router.put("/update/:id", authMiddleware, async (req, res) => {
     // Update fields if provided
     if (name) user.name = name;
     if (email) user.email = email;
-    if (password) user.password = password; // Remember to hash passwords in a real app
+    if (password) user.password = password; // 🔒 Should hash password in real app
 
     await user.save();
 
@@ -97,6 +99,5 @@ router.put("/update/:id", authMiddleware, async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
 
 module.exports = router;

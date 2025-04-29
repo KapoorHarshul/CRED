@@ -2,7 +2,7 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
-const User = require("../models/UserModel1"); // ✅ Correct import
+const { User } = require("../models/UserModel1"); // ✅ Correct import
 
 const router = express.Router();
 
@@ -14,14 +14,12 @@ router.post("/register", async (req, res) => {
     return res.status(400).json({ message: "Please provide all fields" });
 
   try {
-    let user = await User.findOne({ email });
+    let user = await User.findOne({ where: { email } });
     if (user) return res.status(400).json({ message: "User already exists" });
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    user = new User({ name, email, password: hashedPassword });
-    await user.save();
+    user = await User.create({ name, email, password: hashedPassword });
 
     res.status(201).json({ message: "User registered successfully" });
   } catch (error) {
@@ -38,15 +36,17 @@ router.post("/login", async (req, res) => {
     return res.status(400).json({ message: "Please provide both email and password" });
 
   try {
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ where: { email } });
     if (!user) return res.status(400).json({ message: "Invalid email or password" });
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: "Invalid email or password" });
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: "1h" });
 
-    res.json({ token, user: { id: user._id, name: user.name, email: user.email } });
+    await user.update({ token });
+
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
   } catch (error) {
     console.error("Error in /login:", error);
     res.status(500).json({ message: "Server error!" });
@@ -60,17 +60,14 @@ router.post("/forgot-password", async (req, res) => {
   if (!email) return res.status(400).json({ message: "Please provide email" });
 
   try {
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ where: { email } });
     if (!user) return res.status(404).json({ message: "User not found" });
 
     const token = crypto.randomBytes(32).toString("hex");
-    const expiry = Date.now() + 15 * 60 * 1000; // 15 minutes
+    const expiry = new Date(Date.now() + 15 * 60 * 1000);
 
-    user.resetToken = token;
-    user.resetTokenExpiry = expiry;
-    await user.save();
+    await user.update({ resetToken: token, resetTokenExpiry: expiry });
 
-    // ✉️ Send token via email (You can integrate nodemailer here)
     console.log(`Reset link: http://localhost:3000/reset-password/${token}`);
 
     res.json({ message: "Password reset link sent (check console/email)" });
@@ -89,19 +86,25 @@ router.post("/reset-password/:token", async (req, res) => {
     return res.status(400).json({ message: "Please provide new password" });
 
   try {
+    const Sequelize = require('sequelize');
+    const Op = Sequelize.Op;
+
     const user = await User.findOne({
-      resetToken: token,
-      resetTokenExpiry: { $gt: Date.now() },
+      where: {
+        resetToken: token,
+        resetTokenExpiry: { [Op.gt]: new Date() }
+      }
     });
 
     if (!user) return res.status(400).json({ message: "Invalid or expired token" });
 
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(password, salt);
-    user.resetToken = undefined;
-    user.resetTokenExpiry = undefined;
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    await user.save();
+    await user.update({
+      password: hashedPassword,
+      resetToken: null,
+      resetTokenExpiry: null
+    });
 
     res.json({ message: "Password reset successful. You can now log in." });
   } catch (error) {

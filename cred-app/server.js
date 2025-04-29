@@ -1,10 +1,11 @@
 require("dotenv").config();
 const express = require("express");
-const mongoose = require("mongoose");
 const cors = require("cors");
 
 const authRoutes = require("./routes/authRoutes"); // Authentication routes
 const userRoutes = require("./routes/userRoutes"); // User-related routes (profile, etc.)
+
+const { sequelize } = require("./models/UserModel1"); // Sequelize DB connection
 
 const app = express();
 
@@ -12,11 +13,14 @@ const app = express();
 app.use(express.json()); // Body parser for JSON requests
 app.use(cors()); // Enable CORS for frontend communication
 
-// Connect to MongoDB
-mongoose
-  .connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => console.log("✅ MongoDB Connected"))
-  .catch((err) => console.error("❌ MongoDB Connection Error:", err));
+// Connect to MySQL
+sequelize.authenticate()
+  .then(() => {
+    console.log("✅ MySQL Connected");
+    return sequelize.sync(); // Sync tables
+  })
+  .then(() => console.log("✅ Sequelize models synced"))
+  .catch((err) => console.error("❌ MySQL Connection Error:", err));
 
 // Routes
 app.use("/api/auth", authRoutes); // Authentication (Login, Register)
